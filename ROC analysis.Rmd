@@ -1,0 +1,8 @@
+```{r }
+library(data.table)
+
+input_roc = fread("~/Desktop/snippets/data/ben_HIVINTEGRATION_roc_test/S24A_roc_data_0.005.txt")
+input_roc$threshold=seq(0,1,0.005)
+ggplot(input_roc,aes(x=FPR,y=TPR,colour=threshold))+geom_point()+geom_line()+scale_x_continuous(limits=c(0,1))+scale_y_continuous(limits=c(0,1))+geom_abline(intercept=1)
+
+```

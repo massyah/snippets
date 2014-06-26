@@ -1,0 +1,14 @@
+# Extrating FASTQ headers from a set of FASTQ files
+
+Used in [EXOMEBERGONIE]
+Goal is to get each header and to append the file name from which it originates from 
+
+```{bash }
+FILES="$@"
+for FILE in $FILES
+do
+         grep "^@" $FILE | sed "s/$/:$FILE/"
+done
+
+
+```
