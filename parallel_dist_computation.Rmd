@@ -1,0 +1,92 @@
+R default `dist`  compute a dense matrix that we don't need for a kNN computation. Instead of returning the full N*N matrix, we return a sparse matrix containing the indices of the top K colums for each row, a N*K matrix (K usually in 1..50, N usually in 5000....16k). We provide a parallel solution.
+
+
+```{r libs}
+library(plyr)
+library(fields)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(doMC)
+library(caret)
+```
+
+We generate random dense data in M classes
+
+```{r }
+n_samples=10000
+n_features=256
+m_classes=5
+input_data= data.table(matrix(rnorm(n_samples*n_features),ncol=n_features))
+input_data$class=sample(1:m_classes,size=n_samples,replace=T)
+input_data_count_cols=colnames(input_data)[1:n_features]
+
+input_data_d=as.matrix(dist(input_data[,input_data_count_cols,with=F]))
+input_data_d_ranks=apply(input_data_d,MARGIN=1,FUN=function(r) rank(r))
+```
+
+We test on some selected obs 
+
+```{r }
+ranked = rank(rdist(input_data[2,input_data_count_cols,with=F],input_data[,input_data_count_cols,with=F]))
+data.frame(src=2,tgt=which(ranked<=5),rank=ranked[which(ranked<=5)])
+```
+
+We wrap into a fun
+
+```{r }
+compute_closest= function(feat_matrix,selected_features,selected_obs,n_closer,selected_labels=NA){
+	selected_obs=na.omit(selected_obs)
+	dist_m=rdist(input_data[selected_obs,input_data_count_cols,with=F],input_data[,input_data_count_cols,with=F])
+	ranked = apply(dist_m,MARGIN=1,rank)
+	if(is.na(selected_labels)){
+		ldply(1:length(selected_obs),function(i){	
+			selected_i=which(ranked[,i]<=n_closer); 
+			data.table(src=selected_obs[i],tgt=selected_i,rank=ranked[selected_i,i],dist=dist_m[i,selected_i])
+		})
+
+	}else{
+		ldply(1:length(selected_obs),function(i){	
+			selected_i=which(ranked[,i]<=n_closer); 
+			cbind(data.table(src=selected_obs[i],tgt=selected_i,rank=ranked[selected_i,i],dist=dist_m[i,selected_i]),feat_matrix[selected_i,selected_labels,with=F])
+		})
+	}
+}
+compute_closest(input_data,input_data_count_cols, 2:5,n_closer=10)
+compute_closest(input_data,input_data_count_cols, 2:5,n_closer=10,c("class"))
+res=data.table(compute_closest(input_data,input_data_count_cols, 1:nrow(input_data),n_closer=5,selected_labels=c("class")))
+
+```
+We wrap it in a parallel apply 
+
+```{r }
+library(foreach)
+library(doParallel)
+n_cores=4
+registerDoParallel(cores=n_cores)
+
+# non parallel, 10 calls to compute_closest
+res= data.table(foreach(i=1:10,.combine='rbind',.inorder=F) %do% compute_closest(input_data,input_data_count_cols, i,n_closer=5,selected_labels=c("class")))
+
+# input splitting, 4 calls to compute_closest
+input_splits= matrix(c(1:10,rep(NA,2)),ncol=n_cores)
+
+res= data.table(foreach(i=iter(input_splits,by='col'),.combine='rbind',.inorder=F) %do% {str(unlist(i[,1]));sum(i)})
+
+res= data.table(foreach(i=iter(input_splits,by='col'),.combine='rbind',.inorder=F) %do% compute_closest(input_data,input_data_count_cols, i[,1],n_closer=5,selected_labels=c("class")))
+
+
+# parallel version 
+input_size=n_samples
+input_splits= matrix(c(1:input_size,rep(NA,input_size %% 4)),ncol=n_cores)
+
+res= data.table(foreach(i=iter(input_splits,by='col'),.combine='rbind',.inorder=F) %dopar% compute_closest(input_data,input_data_count_cols, i[,1],n_closer=10,selected_labels=c("class")))
+
+```
+
+
+# Extensions
+## Defining additional distance measures 
+
+## Working on sparse representations of features.
+
