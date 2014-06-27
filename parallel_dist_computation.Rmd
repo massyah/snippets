@@ -35,6 +35,10 @@ data.frame(src=2,tgt=which(ranked<=5),rank=ranked[which(ranked<=5)])
 We wrap into a fun
 
 ```{r }
+
+### Correct that to account for ties ! 
+
+
 compute_closest= function(feat_matrix,selected_features,selected_obs,n_closer,selected_labels=NA){
 	selected_obs=na.omit(selected_obs)
 	dist_m=rdist(input_data[selected_obs,input_data_count_cols,with=F],input_data[,input_data_count_cols,with=F])
